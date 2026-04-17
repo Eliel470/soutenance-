@@ -1,0 +1,102 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        (request.auth.token.email == "elieldossou13@gmail.com" && request.auth.token.email_verified == true) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getRole() == 'admin')
+      );
+    }
+
+    function isGerant() {
+      return isAuthenticated() && (
+        isAdmin() || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getRole() == 'gerant')
+      );
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function isValidUser(data) {
+      return data.role in ['admin', 'gerant', 'client'] &&
+             data.email is string &&
+             data.uid is string;
+    }
+
+    function isValidHotel(data) {
+      return data.name is string && data.name.size() >= 2 && data.name.size() <= 100 &&
+             data.managerId is string &&
+             data.stars >= 1 && data.stars <= 5;
+    }
+
+    function isValidReservation(data) {
+      return data.clientId == request.auth.uid &&
+             data.totalPrice > 0 &&
+             data.status in ['pending', 'confirmed', 'cancelled'];
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    // Users
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if (isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin();
+    }
+
+    // Hotels
+    match /hotels/{hotelId} {
+      allow read: if true; // Public list
+      allow create: if isGerant();
+      allow update, delete: if isAdmin() || (isGerant() && resource.data.managerId == request.auth.uid);
+
+      // Rooms
+      match /rooms/{roomId} {
+        allow read: if true;
+        allow create, update, delete: if isAdmin() || (isGerant() && get(/databases/$(database)/documents/hotels/$(hotelId)).data.managerId == request.auth.uid);
+      }
+    }
+
+    // Reservations
+    match /reservations/{reservationId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.clientId || 
+        isAdmin() || 
+        (isGerant() && get(/databases/$(database)/documents/hotels/$(resource.data.hotelId)).data.managerId == request.auth.uid)
+      );
+      allow create: if isAuthenticated() && isValidReservation(request.resource.data);
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        (isGerant() && get(/databases/$(database)/documents/hotels/$(resource.data.hotelId)).data.managerId == request.auth.uid) ||
+        (isOwner(resource.data.clientId) && request.resource.data.status == 'cancelled')
+      );
+    }
+
+    // Reviews
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update: if isAdmin();
+      allow delete: if isAdmin() || isOwner(resource.data.clientId);
+    }
+  }
+}

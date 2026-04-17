@@ -1,0 +1,107 @@
+{
+  "entities": {
+    "users": {
+      "title": "User Profile",
+      "description": "Information about the user, including their role.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "gerant", "client"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "photoURL": { "type": "string" },
+        "phone": { "type": "string" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "hotels": {
+      "title": "Hotel",
+      "description": "Hotel details managed by a manager.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "address": { "type": "string" },
+        "city": { "type": "string" },
+        "managerId": { "type": "string" },
+        "stars": { "type": "number" },
+        "images": { "type": "array", "items": { "type": "string" } },
+        "amenities": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "managerId", "city"]
+    },
+    "rooms": {
+      "title": "Room",
+      "description": "Room details within a hotel.",
+      "type": "object",
+      "properties": {
+        "hotelId": { "type": "string" },
+        "type": { "type": "string" },
+        "pricePerNight": { "type": "number" },
+        "capacity": { "type": "number" },
+        "description": { "type": "string" },
+        "isAvailable": { "type": "boolean" },
+        "images": { "type": "array", "items": { "type": "string" } },
+        "amenities": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["hotelId", "type", "pricePerNight"]
+    },
+    "reservations": {
+      "title": "Reservation",
+      "description": "Booking records for rooms.",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "hotelId": { "type": "string" },
+        "roomId": { "type": "string" },
+        "startDate": { "type": "string", "format": "date-time" },
+        "endDate": { "type": "string", "format": "date-time" },
+        "totalPrice": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "cancelled"] },
+        "guestsCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "options": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["clientId", "roomId", "startDate", "endDate", "totalPrice"]
+    },
+    "reviews": {
+      "title": "Review",
+      "description": "Customer feedback for hotels.",
+      "type": "object",
+      "properties": {
+        "hotelId": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "isModerated": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["hotelId", "clientId", "rating"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "users",
+      "description": "Global user profiles."
+    },
+    "hotels/{hotelId}": {
+      "schema": "hotels",
+      "description": "Available hotels."
+    },
+    "hotels/{hotelId}/rooms/{roomId}": {
+      "schema": "rooms",
+      "description": "Rooms within a specific hotel."
+    },
+    "reservations/{reservationId}": {
+      "schema": "reservations",
+      "description": "All booking records."
+    },
+    "reviews/{reviewId}": {
+      "schema": "reviews",
+      "description": "Hotel reviews."
+    }
+  }
+}
