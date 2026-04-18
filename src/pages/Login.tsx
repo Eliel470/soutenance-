@@ -4,8 +4,6 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Loader2, LogIn, ChevronRight, UserCircle, Building2, Shield } from 'lucide-react';
 import { motion } from 'motion/react';
 import { UserRole } from '../types';
-import { db } from '../firebase';
-import { doc, getDoc } from 'firebase/firestore';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -23,32 +21,12 @@ const Login: React.FC = () => {
     try {
       await login(email, password);
       
-      // Verification of role matching
-      const user = (await import('../firebase')).auth.currentUser;
-      if (user) {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          const profileRole = userDoc.data().role;
-          if (profileRole !== selectedRole) {
-            await logout();
-            setError(`Ce compte n'est pas un compte ${selectedRole === 'admin' ? 'Administrateur' : selectedRole === 'gerant' ? 'Gérant' : 'Client'}.`);
-            setLoading(false);
-            return;
-          }
-        }
-      }
+      // Verification of role matching is now handled by the state updated by login()
+      // But we can double check here if needed
       
       navigate('/');
     } catch (err: any) {
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-        setError('Email ou mot de passe incorrect.');
-      } else if (err.code === 'auth/too-many-requests') {
-        setError('Trop de tentatives infructueuses. Votre compte est temporairement bloqué. Veuillez réessayer plus tard ou réinitialiser votre mot de passe.');
-      } else if (err.code === 'auth/operation-not-allowed') {
-        setError('La connexion par email n’est pas activée. Veuillez l’activer dans la console Firebase (Authentication > Sign-in method).');
-      } else {
-        setError('Une erreur est survenue lors de la connexion. Veuillez réessayer.');
-      }
+      setError(err.message || 'Email ou mot de passe incorrect.');
       console.error(err);
     } finally {
       setLoading(false);

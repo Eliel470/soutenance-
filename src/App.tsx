@@ -16,8 +16,8 @@ import GerantDashboard from './pages/GerantDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import VerifyEmail from './pages/VerifyEmail';
 import CreateHotel from './pages/CreateHotel';
+import ManageRooms from './pages/ManageRooms';
 
 import ErrorBoundary from './components/common/ErrorBoundary';
 import MyReservations from './pages/MyReservations';
@@ -33,12 +33,19 @@ const AppContent: React.FC = () => {
           <Route path="/hotels/:id" element={<HotelDetails />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route 
             path="/gerant/setup" 
             element={
-              <ProtectedRoute allowedRoles={['gerant', 'admin']}>
+              <ProtectedRoute allowedRoles={['gerant']}>
                 <CreateHotel />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/gerant/hotels/:hotelId/rooms" 
+            element={
+              <ProtectedRoute allowedRoles={['gerant']}>
+                <ManageRooms />
               </ProtectedRoute>
             } 
           />
@@ -55,7 +62,7 @@ const AppContent: React.FC = () => {
         <Route 
           path="/gerant/dashboard" 
           element={
-            <ProtectedRoute allowedRoles={['gerant', 'admin']}>
+            <ProtectedRoute allowedRoles={['gerant']}>
               <GerantDashboard />
             </ProtectedRoute>
           } 

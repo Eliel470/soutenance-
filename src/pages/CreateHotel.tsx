@@ -37,17 +37,15 @@ const LocationMarker = ({ position, setPosition }: { position: L.LatLng | null, 
 };
 
 const CreateHotel: React.FC = () => {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
-    name: '',
+    nom: '',
     description: '',
-    address: '',
-    city: 'Cotonou',
-    stars: 3,
+    adresse: '',
   });
 
   const [position, setPosition] = useState<L.LatLng | null>(new L.LatLng(6.365, 2.418)); // Default Cotonou
@@ -57,11 +55,12 @@ const CreateHotel: React.FC = () => {
     setLoading(true);
     try {
       await hotelService.createHotel({
-        ...formData,
-        managerId: user.uid,
-        images: ["https://picsum.photos/seed/newhotel/800/600"],
-        amenities: ["WiFi"],
-        coordinates: position ? { lat: position.lat, lng: position.lng } : undefined,
+        nom: formData.nom,
+        description: formData.description,
+        adresse: formData.adresse,
+        gerant_id: user.id,
+        latitude: position?.lat || 6.365,
+        longitude: position?.lng || 2.418,
       });
       navigate('/gerant/dashboard');
     } catch (error) {
@@ -128,8 +127,8 @@ const CreateHotel: React.FC = () => {
                     <label className="text-[10px] font-black text-text-muted uppercase tracking-widest px-1">Nom de l'établissement</label>
                     <input
                       type="text"
-                      value={formData.name}
-                      onChange={(e) => setFormData({...formData, name: e.target.value})}
+                      value={formData.nom}
+                      onChange={(e) => setFormData({...formData, nom: e.target.value})}
                       className="w-full px-4 py-3 bg-gray-50 border border-border-base rounded-button focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm font-bold"
                       placeholder="Ex: Bénin Royal Hôtel"
                     />
@@ -145,22 +144,11 @@ const CreateHotel: React.FC = () => {
                       placeholder="Décrivez votre hôtel, ses services et son ambiance..."
                     />
                   </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-text-muted uppercase tracking-widest px-1">Étoiles</label>
-                    <select 
-                      value={formData.stars}
-                      onChange={(e) => setFormData({...formData, stars: Number(e.target.value)})}
-                      className="w-full px-4 py-3 bg-gray-50 border border-border-base rounded-button focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm font-bold"
-                    >
-                      {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n} Étoiles</option>)}
-                    </select>
-                  </div>
                 </div>
 
                 <div className="flex justify-end pt-6">
                   <button
-                    disabled={!formData.name || !formData.description}
+                    disabled={!formData.nom || !formData.description}
                     onClick={() => setStep(2)}
                     className="flex items-center gap-2 px-10 py-4 bg-primary text-white rounded-button font-black uppercase tracking-widest text-xs hover:bg-indigo-700 transition-all shadow-lg active:scale-95 disabled:opacity-50"
                   >
@@ -187,20 +175,11 @@ const CreateHotel: React.FC = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-text-muted uppercase tracking-widest px-1">Ville</label>
-                    <input
-                      type="text"
-                      value={formData.city}
-                      onChange={(e) => setFormData({...formData, city: e.target.value})}
-                      className="w-full px-4 py-3 bg-gray-50 border border-border-base rounded-button focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm font-bold"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-text-muted uppercase tracking-widest px-1">Adresse physique</label>
                     <input
                       type="text"
-                      value={formData.address}
-                      onChange={(e) => setFormData({...formData, address: e.target.value})}
+                      value={formData.adresse}
+                      onChange={(e) => setFormData({...formData, adresse: e.target.value})}
                       className="w-full px-4 py-3 bg-gray-50 border border-border-base rounded-button focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm font-bold"
                       placeholder="Ex: Rue du Commerce, Ganhi"
                     />
@@ -230,7 +209,7 @@ const CreateHotel: React.FC = () => {
                     Retour
                   </button>
                   <button
-                    disabled={!formData.address || !position}
+                    disabled={!formData.adresse || !position}
                     onClick={handleCreate}
                     className="flex items-center gap-2 px-10 py-4 bg-primary text-white rounded-button font-black uppercase tracking-widest text-xs hover:bg-indigo-700 transition-all shadow-lg active:scale-95 disabled:opacity-50"
                   >

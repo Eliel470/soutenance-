@@ -1,59 +1,52 @@
 import React, { useEffect, useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { firestoreService } from '../services/firestoreService';
-import { UserProfile, Review } from '../types';
+import { UserProfile, UserRole } from '../types';
+import { userService } from '../services/userService';
 import { 
   Users, 
   ShieldAlert, 
   MessageSquare, 
-  CheckCircle, 
-  XCircle,
   BarChart3,
-  Search,
   Star
 } from 'lucide-react';
-import { format } from 'date-fns';
 import { motion } from 'motion/react';
 
 const AdminDashboard: React.FC = () => {
-  const { profile } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
-  const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
     setLoading(true);
-    const [usersData, reviewsData] = await Promise.all([
-      firestoreService.getCollection<UserProfile>('users'),
-      firestoreService.getCollection<Review>('reviews')
-    ]);
-    setUsers(usersData);
-    setReviews(reviewsData);
-    setLoading(false);
+    try {
+      const allUsers = await userService.getAllUsers();
+      setUsers(allUsers);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     fetchData();
   }, []);
 
-  const handleUpdateRole = async (userId: string, currentRole: string) => {
-    const roles: string[] = ['admin', 'gerant', 'client'];
+  const handleUpdateRole = async (userId: string, currentRole: UserRole) => {
+    const roles: UserRole[] = ['admin', 'gerant', 'client'];
     const nextRole = roles[(roles.indexOf(currentRole) + 1) % roles.length];
     
     if (window.confirm(`Changer le rôle vers ${nextRole} ?`)) {
-      await firestoreService.updateDocument('users', userId, { role: nextRole });
-      fetchData();
+      try {
+        await userService.updateUserRole(userId, nextRole);
+        fetchData();
+      } catch (err) {
+        console.error(err);
+      }
     }
-  };
-
-  const handleModerateReview = async (reviewId: string, status: boolean) => {
-    await firestoreService.updateDocument('reviews', reviewId, { isModerated: status });
-    fetchData();
   };
 
   const stats = [
     { label: "Utilisateurs", value: users.length, icon: Users, color: "blue" },
-    { label: "Avis à modérer", value: reviews.filter(r => !r.isModerated).length, icon: ShieldAlert, color: "red" },
+    { label: "Avis à modérer", value: 0, icon: ShieldAlert, color: "red" },
     { label: "Taux Occupation", value: "78%", icon: BarChart3, color: "green" },
   ];
 
@@ -81,7 +74,7 @@ const AdminDashboard: React.FC = () => {
         ))}
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-12">
+      <div className="grid lg:grid-cols-1 gap-12">
         {/* User Management */}
         <section className="space-y-6">
           <div className="flex justify-between items-center">
@@ -102,14 +95,14 @@ const AdminDashboard: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {users.map(u => (
-                    <tr key={u.uid} className="hover:bg-gray-50/50 transition-colors">
+                    <tr key={u.id} className="hover:bg-gray-50/50 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="h-10 w-10 bg-blue-50 flex items-center justify-center rounded-xl text-blue-600 font-bold">
-                            {u.displayName?.[0]}
+                            {u.nom?.[0]}
                           </div>
                           <div>
-                            <div className="font-bold text-gray-900">{u.displayName}</div>
+                            <div className="font-bold text-gray-900">{u.prenom} {u.nom}</div>
                             <div className="text-xs text-gray-400">{u.email}</div>
                           </div>
                         </div>
@@ -125,7 +118,7 @@ const AdminDashboard: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <button 
-                          onClick={() => handleUpdateRole(u.uid, u.role)}
+                          onClick={() => handleUpdateRole(u.id, u.role)}
                           className="bg-gray-900 text-white px-5 py-2 rounded-xl text-xs font-bold hover:bg-blue-600 transition-colors"
                         >
                           Changer
@@ -136,55 +129,6 @@ const AdminDashboard: React.FC = () => {
                 </tbody>
               </table>
             </div>
-          </div>
-        </section>
-
-        {/* Review Moderation */}
-        <section className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold flex items-center gap-3">
-              <MessageSquare className="h-6 w-6 text-blue-600" /> Modération Avis
-            </h2>
-            <div className="text-xs font-bold text-gray-400 uppercase">{reviews.length} total</div>
-          </div>
-          <div className="space-y-4">
-            {reviews.length === 0 ? (
-              <div className="p-12 text-center text-gray-400 italic bg-white rounded-3xl border border-gray-100">
-                Aucun avis pour le moment.
-              </div>
-            ) : reviews.map(r => (
-              <div key={r.id} className="bg-white p-6 rounded-3xl border border-gray-100 flex justify-between items-start gap-6">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-gray-900">{r.clientName}</span>
-                    <span className="text-xs text-gray-400">sur Hôtel ID: {r.hotelId}</span>
-                  </div>
-                  <div className="flex text-yellow-400 h-3">
-                    {Array.from({ length: r.rating }).map((_, i) => <Star key={i} className="h-3 w-3 fill-current" />)}
-                  </div>
-                  <p className="text-gray-600 text-sm italic">"{r.comment}"</p>
-                </div>
-                <div className="flex flex-col gap-2">
-                  {!r.isModerated ? (
-                    <button 
-                      onClick={() => handleModerateReview(r.id!, true)}
-                      className="p-2 bg-green-50 text-green-600 rounded-xl hover:bg-green-100 transition-colors"
-                      title="Approuver"
-                    >
-                      <CheckCircle className="h-5 w-5" />
-                    </button>
-                  ) : (
-                    <button 
-                      onClick={() => handleModerateReview(r.id!, false)}
-                      className="p-2 bg-yellow-50 text-yellow-600 rounded-xl hover:bg-yellow-100 transition-colors"
-                      title="Révoquer"
-                    >
-                      <XCircle className="h-5 w-5" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
           </div>
         </section>
       </div>

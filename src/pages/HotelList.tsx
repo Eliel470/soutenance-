@@ -84,15 +84,15 @@ const HotelList: React.FC = () => {
             >
               <div className="relative h-60 overflow-hidden bg-gray-100">
                 <img 
-                  src={hotel.images?.[0] || 'https://picsum.photos/seed/hotel/800/600'} 
+                  src="https://picsum.photos/seed/hotel/800/600" 
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                  alt={hotel.name}
+                  alt={hotel.nom}
                   referrerPolicy="no-referrer"
                 />
                 <div className="absolute top-4 left-4">
                   <div className="bg-white/95 backdrop-blur shadow-sm px-2.5 py-1 rounded-lg flex items-center gap-1.5 font-black text-[10px] uppercase tracking-tighter">
                     <Star className="h-3 w-3 text-amber-500 fill-amber-500" />
-                    <span>{hotel.stars} ÉToiles</span>
+                    <span>{hotel.stars || 3} ÉToiles</span>
                   </div>
                 </div>
               </div>
@@ -100,10 +100,10 @@ const HotelList: React.FC = () => {
               <div className="p-6 space-y-4 flex-grow flex flex-col justify-between">
                 <div className="space-y-1">
                   <div className="text-primary text-[10px] font-black uppercase tracking-[0.2em] mb-1">
-                    {hotel.city}
+                    Cotonou
                   </div>
                   <h3 className="text-xl font-extrabold text-text-main leading-tight group-hover:text-primary transition-colors">
-                    {hotel.name}
+                    {hotel.nom}
                   </h3>
                   <p className="text-text-muted text-xs font-medium leading-relaxed line-clamp-2 pt-2">
                     {hotel.description}
@@ -113,7 +113,7 @@ const HotelList: React.FC = () => {
                 <div className="pt-4 flex items-end justify-between border-t border-border-base/40">
                    <div className="space-y-0.5">
                      <span className="block text-[10px] text-text-muted font-black uppercase tracking-widest">À partir de</span>
-                     <span className="text-lg font-black text-text-main">{formatPrice(95)}</span>
+                     <span className="text-lg font-black text-text-main">{formatPrice(45000)}</span>
                    </div>
                    <Link 
                     to={`/hotels/${hotel.id}`} 

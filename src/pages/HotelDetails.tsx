@@ -2,11 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { hotelService } from '../services/hotelService';
 import { Hotel, Room } from '../types';
-import { Star, MapPin, Check, Info, Users, ArrowLeft, Loader2 } from 'lucide-react';
+import { Star, MapPin, Check, Info, Users, ArrowLeft, Loader2, MessageSquare } from 'lucide-react';
 import { formatPrice } from '../lib/utils';
 import { motion } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
 import { reservationService } from '../services/reservationService';
+import { reviewService } from '../services/reviewService';
+import { Review } from '../types';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
 const HotelDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -22,6 +26,8 @@ const HotelDetails: React.FC = () => {
   const [bookingLoading, setBookingLoading] = useState(false);
   const [totalPrice, setTotalPrice] = useState(0);
   const [stayDays, setStayDays] = useState(0);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
 
   const calculateStay = () => {
     if (!startDate || !endDate || !bookingRoom) return;
@@ -32,7 +38,7 @@ const HotelDetails: React.FC = () => {
     
     if (days > 0) {
       setStayDays(days);
-      setTotalPrice(bookingRoom.pricePerNight * days);
+      setTotalPrice(bookingRoom.prix * days);
     } else {
       setStayDays(0);
       setTotalPrice(0);
@@ -64,13 +70,18 @@ const HotelDetails: React.FC = () => {
     setBookingLoading(true);
     try {
       await reservationService.createReservation({
-        clientId: user.uid,
-        hotelId: hotel.id,
-        roomId: bookingRoom.id,
-        startDate,
-        endDate,
-        totalPrice,
-        guestsCount: bookingRoom.capacity,
+        user_id: user.id,
+        hotel_id: hotel.id,
+        hotel_nom: hotel.nom,
+        chambre_id: bookingRoom.id,
+        chambre_type: bookingRoom.type,
+        chambre_prix: bookingRoom.prix,
+        client_nom: user.nom,
+        client_prenom: user.prenom,
+        date_arrivee: startDate,
+        date_depart: endDate,
+        statut: 'en_attente',
+        demande_speciale: "",
       });
       alert("Réservation effectuée avec succès !");
       setBookingRoom(null);
@@ -84,18 +95,34 @@ const HotelDetails: React.FC = () => {
   };
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchHotelData = async () => {
+      if (!id) return;
+      const h = await hotelService.getHotelById(id);
+      setHotel(h);
+    };
+    fetchHotelData();
+  }, [id]);
+
+  useEffect(() => {
+    const fetchRoomsData = async () => {
       if (!id) return;
       setLoading(true);
-      const [hotelData, roomsData] = await Promise.all([
-        hotelService.getHotelById(id),
-        hotelService.getRooms(id)
-      ]);
-      setHotel(hotelData);
+      const roomsData = await hotelService.getRooms(id, startDate || undefined, endDate || undefined);
       setRooms(roomsData);
       setLoading(false);
     };
-    fetchData();
+    fetchRoomsData();
+  }, [id, startDate, endDate]);
+
+  useEffect(() => {
+    const fetchReviews = async () => {
+      if (!id) return;
+      setReviewsLoading(true);
+      const data = await reviewService.getHotelReviews(id);
+      setReviews(data);
+      setReviewsLoading(false);
+    };
+    fetchReviews();
   }, [id]);
 
   if (loading) return <div className="p-20 text-center animate-pulse">Chargement des détails...</div>;
@@ -111,38 +138,57 @@ const HotelDetails: React.FC = () => {
       <section className="grid md:grid-cols-2 gap-16 items-start">
         <div className="space-y-8">
           <div className="space-y-4">
-            <div className="flex items-center gap-1 text-amber-500">
-              {Array.from({ length: hotel.stars }).map((_, i) => (
-                <Star key={i} className="h-4 w-4 fill-current" />
-              ))}
-              <span className="ml-2 text-[10px] font-black text-text-muted uppercase tracking-widest">{hotel.stars} Étoiles</span>
-            </div>
-            <h1 className="text-5xl font-black text-text-main tracking-tighter leading-tight">{hotel.name}</h1>
+            <h1 className="text-5xl font-black text-text-main tracking-tighter leading-tight">{hotel.nom}</h1>
             <p className="flex items-center gap-2 text-text-muted text-sm font-medium">
-              <MapPin className="h-4 w-4 text-primary" /> {hotel.address}, {hotel.city}
+              <MapPin className="h-4 w-4 text-primary" /> {hotel.adresse}
             </p>
           </div>
 
           <p className="text-lg text-text-muted leading-relaxed font-medium border-l-4 border-primary/20 pl-6">
             {hotel.description}
           </p>
-          
-          <div className="flex flex-wrap gap-3 pt-4">
-            {hotel.amenities?.map((am, i) => (
-              <div key={i} className="flex items-center gap-2 px-5 py-2.5 bg-white border border-border-base text-text-main rounded-button text-xs font-bold uppercase tracking-wide shadow-sm">
-                <Check className="h-3 w-3 text-emerald-500" /> {am}
-              </div>
-            ))}
-          </div>
         </div>
 
         <div className="rounded-card overflow-hidden border border-border-base shadow-2xl h-[500px] group">
           <img 
-            src={hotel.images?.[0] || 'https://picsum.photos/seed/hotelhero/1200/800'} 
+            src="https://picsum.photos/seed/hotelhero/1200/800" 
             className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
-            alt={hotel.name}
+            alt={hotel.nom}
             referrerPolicy="no-referrer"
           />
+        </div>
+      </section>
+
+      {/* Dates & Availability Header */}
+      <section id="availability-checker" className="bg-white p-8 rounded-[2.5rem] border border-border-base shadow-sm space-y-8">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-8">
+          <div className="space-y-1 text-center md:text-left">
+            <h2 className="text-2xl font-black text-text-main tracking-tight">Vérifier la disponibilité</h2>
+            <p className="text-sm text-text-muted font-medium">Choisissez vos dates pour voir les chambres libres.</p>
+          </div>
+          <div className="flex flex-col sm:flex-row items-center gap-4 bg-bg-base p-2 rounded-3xl w-full md:w-auto border border-border-base">
+            <div className="flex flex-col px-6 py-2">
+              <label className="text-[9px] font-black text-text-muted uppercase tracking-widest mb-1">Arrivée</label>
+              <input 
+                type="date" 
+                className="bg-transparent font-bold text-sm outline-none cursor-pointer"
+                value={startDate}
+                min={new Date().toISOString().split('T')[0]}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+            <div className="hidden sm:block w-px h-10 bg-border-base" />
+            <div className="flex flex-col px-6 py-2">
+              <label className="text-[9px] font-black text-text-muted uppercase tracking-widest mb-1">Départ</label>
+              <input 
+                type="date" 
+                className="bg-transparent font-bold text-sm outline-none cursor-pointer"
+                value={endDate}
+                min={startDate || new Date().toISOString().split('T')[0]}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
+          </div>
         </div>
       </section>
 
@@ -153,7 +199,9 @@ const HotelDetails: React.FC = () => {
             <div className="text-[10px] font-black text-primary uppercase tracking-widest">Configuration</div>
             <h2 className="text-3xl font-black text-text-main tracking-tight">Hébergements</h2>
           </div>
-          <div className="text-text-muted font-bold text-xs uppercase tracking-widest">{rooms.length} Suites disponibles</div>
+          <div className="text-text-muted font-bold text-xs uppercase tracking-widest">
+            {rooms.length} {startDate && endDate ? 'Suites disponibles pour vos dates' : 'Suites répertoriées'}
+          </div>
         </div>
 
         <div className="grid md:grid-cols-2 gap-10">
@@ -161,7 +209,7 @@ const HotelDetails: React.FC = () => {
             <div key={room.id} className="bg-white rounded-card p-6 border border-border-base flex flex-col sm:flex-row gap-8 hover:shadow-xl transition-all group">
               <div className="sm:w-1/3 h-56 rounded-2xl overflow-hidden shrink-0 border border-border-base">
                 <img 
-                  src={room.images?.[0] || 'https://picsum.photos/seed/room/400/300'} 
+                  src={room.image || 'https://picsum.photos/seed/room/400/300'} 
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
                   alt={room.type} 
                   referrerPolicy="no-referrer" 
@@ -172,7 +220,7 @@ const HotelDetails: React.FC = () => {
                   <div className="flex justify-between items-start">
                     <h3 className="text-xl font-black text-text-main uppercase tracking-tight">{room.type}</h3>
                     <div className="flex items-center gap-1.5 px-2 py-1 bg-bg-base rounded-lg text-text-muted text-[10px] font-bold uppercase">
-                      <Users className="h-3 w-3" /> {room.capacity} Pers.
+                      <Users className="h-3 w-3" /> {room.capacite} Pers.
                     </div>
                   </div>
                   <p className="text-text-muted text-xs font-medium leading-relaxed line-clamp-3">
@@ -182,12 +230,19 @@ const HotelDetails: React.FC = () => {
                 
                 <div className="flex items-center justify-between pt-6 border-t border-border-base/40">
                   <div className="flex flex-col">
-                    <span className="text-2xl font-black text-primary leading-none">{formatPrice(room.pricePerNight)}</span>
+                    <span className="text-2xl font-black text-primary leading-none">{formatPrice(room.prix)}</span>
                     <span className="text-[10px] text-text-muted font-black uppercase tracking-widest mt-1">Par nuitée</span>
                   </div>
                   {(!profile || profile.role === 'client') && (
                     <button 
-                      onClick={() => setBookingRoom(room)}
+                      onClick={() => {
+                        if (!startDate || !endDate) {
+                          alert("Veuillez d'abord sélectionner vos dates dans la section 'Vérifier la disponibilité' ci-dessus.");
+                          document.getElementById('availability-checker')?.scrollIntoView({ behavior: 'smooth' });
+                          return;
+                        }
+                        setBookingRoom(room);
+                      }}
                       className="bg-primary text-white px-8 py-3 rounded-button text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-sm active:scale-95"
                     >
                       Réserver
@@ -214,7 +269,7 @@ const HotelDetails: React.FC = () => {
                 <div className="space-y-3">
                   <div className="text-[10px] font-black text-primary uppercase tracking-widest">Configuration de séjour</div>
                   <h3 className="text-3xl font-black text-text-main tracking-tight">Réserver {bookingRoom.type}</h3>
-                  <p className="text-sm text-text-muted font-medium">Définissez vos dates de séjour pour {hotel.name}.</p>
+                  <p className="text-sm text-text-muted font-medium">Définissez vos dates de séjour pour {hotel.nom}.</p>
                 </div>
 
                 <form onSubmit={handleInitialSubmit} className="space-y-8">
@@ -287,7 +342,7 @@ const HotelDetails: React.FC = () => {
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] mb-1">Hôtel</p>
-                      <p className="font-bold text-text-main">{hotel.name}</p>
+                      <p className="font-bold text-text-main">{hotel.nom}</p>
                     </div>
                   </div>
 
@@ -334,6 +389,67 @@ const HotelDetails: React.FC = () => {
           </motion.div>
         </div>
       )}
+      {/* Reviews Section */}
+      <section className="space-y-10 pt-16 border-t border-border-base">
+        <div className="flex flex-col md:flex-row justify-between items-end gap-6">
+          <div className="space-y-1">
+            <div className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Expériences clients</div>
+            <h2 className="text-3xl font-black text-text-main tracking-tight">Avis & Commentaires</h2>
+          </div>
+          <div className="flex items-center gap-4 bg-amber-50 px-5 py-3 rounded-2xl border border-amber-100">
+            <div className="flex items-center gap-1 text-amber-500">
+              <Star className="h-5 w-5 fill-current" />
+              <span className="text-xl font-black">
+                {reviews.length > 0 
+                  ? (reviews.reduce((acc, r) => acc + r.note, 0) / reviews.length).toFixed(1)
+                  : 'N/A'}
+              </span>
+            </div>
+            <div className="w-px h-6 bg-amber-200" />
+            <span className="text-[10px] font-black text-amber-700 uppercase tracking-widest">{reviews.length} avis vérifiés</span>
+          </div>
+        </div>
+
+        {reviewsLoading ? (
+          <div className="flex justify-center p-12">
+            <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
+          </div>
+        ) : reviews.length === 0 ? (
+          <div className="bg-white p-16 rounded-[2.5rem] border border-border-base text-center space-y-4">
+            <MessageSquare className="h-10 w-10 text-text-muted/20 mx-auto" />
+            <p className="text-text-muted font-medium italic">Aucun avis n'a encore été déposé pour cet établissement.</p>
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-8">
+            {reviews.map((rev) => (
+              <div key={rev.id} className="bg-white p-8 rounded-[2rem] border border-border-base shadow-sm space-y-4 hover:shadow-md transition-shadow">
+                <div className="flex justify-between items-start">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center font-black text-xs uppercase">
+                      {rev.nom?.substring(0, 1)}{rev.prenom?.substring(0, 1)}
+                    </div>
+                    <div>
+                      <p className="font-bold text-text-main text-sm uppercase">{rev.prenom} {rev.nom}</p>
+                      <p className="text-[10px] text-text-muted font-medium">le {format(new Date(rev.created_at), 'dd MMMM yyyy', { locale: fr })}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {[...Array(5)].map((_, i) => (
+                      <Star 
+                        key={i} 
+                        className={`h-3 w-3 ${i < rev.note ? 'fill-amber-400 text-amber-400' : 'text-gray-200'}`} 
+                      />
+                    ))}
+                  </div>
+                </div>
+                <p className="text-text-muted text-sm leading-relaxed whitespace-pre-line italic font-medium">
+                  "{rev.commentaire}"
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 };

@@ -9,7 +9,7 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
-  const { user, profile, loading, hasHotels } = useAuth();
+  const { user, loading, hasHotels } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -24,18 +24,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // 1. Email Verification Check
-  if (!user.emailVerified && location.pathname !== '/verify-email') {
-    return <Navigate to="/verify-email" replace />;
-  }
-
-  // 2. Manager First Hotel Creation Check
-  if (profile?.role === 'gerant' && !hasHotels && location.pathname !== '/gerant/setup') {
+  // 1. Manager First Hotel Creation Check
+  if (user.role === 'gerant' && !hasHotels && location.pathname !== '/gerant/setup') {
     return <Navigate to="/gerant/setup" replace />;
   }
 
-  // 3. Role Authorization Check
-  if (allowedRoles && profile && !allowedRoles.includes(profile.role)) {
+  // 2. Role Authorization Check
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
     return <Navigate to="/" replace />;
   }
 

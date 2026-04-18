@@ -1,102 +1,114 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    // ===============================================================
-    // Helper Functions
-    // ===============================================================
-    function isAuthenticated() {
-      return request.auth != null;
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
     }
 
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
+    // Global Helpers
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isAdmin() { return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
 
-    function getRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
-    }
-
-    function isAdmin() {
-      return isAuthenticated() && (
-        (request.auth.token.email == "elieldossou13@gmail.com" && request.auth.token.email_verified == true) ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getRole() == 'admin')
-      );
-    }
-
-    function isGerant() {
-      return isAuthenticated() && (
-        isAdmin() || 
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getRole() == 'gerant')
-      );
-    }
-
-    function hasRequiredFields(fields) {
-      return request.resource.data.keys().hasAll(fields);
-    }
-
-    function isValidUser(data) {
-      return data.role in ['admin', 'gerant', 'client'] &&
-             data.email is string &&
-             data.uid is string;
-    }
-
-    function isValidHotel(data) {
-      return data.name is string && data.name.size() >= 2 && data.name.size() <= 100 &&
-             data.managerId is string &&
-             data.stars >= 1 && data.stars <= 5;
-    }
-
-    function isValidReservation(data) {
-      return data.clientId == request.auth.uid &&
-             data.totalPrice > 0 &&
-             data.status in ['pending', 'confirmed', 'cancelled'];
-    }
-
-    // ===============================================================
-    // Rules
-    // ===============================================================
-
-    // Users
+    // User Profiles
     match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) && isValidUser(request.resource.data);
-      allow update: if (isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin();
+      function isValidUser(data) {
+        return data.nom is string && data.nom.size() <= 100 &&
+               data.prenom is string && data.prenom.size() <= 100 &&
+               data.email is string && data.email.size() <= 100 &&
+               data.role in ['admin', 'gerant', 'client'] &&
+               (data.phone == null || (data.phone is string && data.phone.size() <= 20));
+      }
+
+      // Users can read any profile (to see manager info or names), 
+      // but pii like email/phone should ideally be restricted.
+      // For this app, let's allow reading profile but only owner can write.
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId) && isValidUser(incoming()) && incoming().role == 'client';
+      allow update: if isOwner(userId) && isValidUser(incoming()) && 
+                    incoming().role == existing().role && // Role immutable by user
+                    incoming().diff(existing()).affectedKeys().hasOnly(['nom', 'prenom', 'phone']);
     }
 
     // Hotels
     match /hotels/{hotelId} {
-      allow read: if true; // Public list
-      allow create: if isGerant();
-      allow update, delete: if isAdmin() || (isGerant() && resource.data.managerId == request.auth.uid);
+      function isValidHotel(data) {
+        return data.nom is string && data.nom.size() <= 255 &&
+               data.adresse is string && data.adresse.size() <= 500 &&
+               data.gerant_id is string &&
+               (data.stars == null || (data.stars is int && data.stars >= 1 && data.stars <= 5));
+      }
 
-      // Rooms
+      allow read: if true; // Public listings
+      allow create: if isSignedIn() && isValidHotel(incoming()) && incoming().gerant_id == request.auth.uid;
+      allow update: if (isSignedIn() && existing().gerant_id == request.auth.uid) || isAdmin();
+      allow delete: if (isSignedIn() && existing().gerant_id == request.auth.uid) || isAdmin();
+
+      // Sub-collection: Rooms
       match /rooms/{roomId} {
+        function isValidRoom(data) {
+          return data.numero is string && data.numero.size() <= 50 &&
+                 data.type is string && data.prix is int && data.prix > 0 &&
+                 data.capacite is int && data.capacite > 0 &&
+                 data.statut in ['libre', 'occupée', 'maintenance'];
+        }
+
         allow read: if true;
-        allow create, update, delete: if isAdmin() || (isGerant() && get(/databases/$(database)/documents/hotels/$(hotelId)).data.managerId == request.auth.uid);
+        allow write: if get(/databases/$(database)/documents/hotels/$(hotelId)).data.gerant_id == request.auth.uid || isAdmin();
       }
     }
 
     // Reservations
-    match /reservations/{reservationId} {
-      allow read: if isAuthenticated() && (
-        request.auth.uid == resource.data.clientId || 
-        isAdmin() || 
-        (isGerant() && get(/databases/$(database)/documents/hotels/$(resource.data.hotelId)).data.managerId == request.auth.uid)
-      );
-      allow create: if isAuthenticated() && isValidReservation(request.resource.data);
-      allow update: if isAuthenticated() && (
-        isAdmin() || 
-        (isGerant() && get(/databases/$(database)/documents/hotels/$(resource.data.hotelId)).data.managerId == request.auth.uid) ||
-        (isOwner(resource.data.clientId) && request.resource.data.status == 'cancelled')
+    match /reservations/{resId} {
+      function isValidReservation(data) {
+        return data.user_id is string && 
+               data.chambre_id is string &&
+               data.hotel_id is string &&
+               data.date_arrivee is string &&
+               data.date_depart is string &&
+               data.statut in ['en_attente', 'confirmee', 'annulee'];
+      }
+
+      allow read: if isSignedIn() && (resource.data.user_id == request.auth.uid || 
+                  get(/databases/$(database)/documents/hotels/$(resource.data.hotel_id)).data.gerant_id == request.auth.uid || 
+                  isAdmin());
+
+      allow create: if isSignedIn() && isValidReservation(incoming()) && 
+                    incoming().user_id == request.auth.uid &&
+                    incoming().statut == 'en_attente' &&
+                    exists(/databases/$(database)/documents/hotels/$(incoming().hotel_id)/rooms/$(incoming().chambre_id));
+
+      allow update: if isSignedIn() && (
+        // Client can cancel
+        (resource.data.user_id == request.auth.uid && incoming().statut == 'annulee' && incoming().diff(existing()).affectedKeys().hasOnly(['statut'])) ||
+        // Manager can confirm/cancel
+        (get(/databases/$(database)/documents/hotels/$(resource.data.hotel_id)).data.gerant_id == request.auth.uid && 
+         incoming().statut in ['confirmee', 'annulee'] && 
+         incoming().diff(existing()).affectedKeys().hasOnly(['statut'])) ||
+        isAdmin()
       );
     }
 
     // Reviews
     match /reviews/{reviewId} {
+      function isValidReview(data) {
+        return data.hotel_id is string &&
+               data.user_id is string &&
+               data.note is int && data.note >= 1 && data.note <= 5 &&
+               data.commentaire is string && data.commentaire.size() <= 2000;
+      }
+
       allow read: if true;
-      allow create: if isAuthenticated();
-      allow update: if isAdmin();
-      allow delete: if isAdmin() || isOwner(resource.data.clientId);
+      allow create: if isSignedIn() && isValidReview(incoming()) && 
+                    incoming().user_id == request.auth.uid &&
+                    exists(/databases/$(database)/documents/hotels/$(incoming().hotel_id));
+      allow delete: if isSignedIn() && (resource.data.user_id == request.auth.uid || isAdmin());
     }
   }
 }

@@ -1,56 +1,54 @@
 export type UserRole = 'admin' | 'gerant' | 'client';
 
 export interface UserProfile {
-  uid: string;
+  id: string;
+  nom: string;
+  prenom: string;
   email: string;
-  displayName: string;
   role: UserRole;
-  createdAt: string;
-  photoURL?: string;
   phone?: string;
+  created_at?: any;
 }
 
 export interface Hotel {
   id: string;
-  name: string;
+  nom: string;
+  adresse: string;
+  latitude: number;
+  longitude: number;
   description: string;
-  address: string;
-  city: string;
-  managerId: string; // Gerant UID
-  images: string[];
-  amenities: string[];
-  stars: number;
-  createdAt: string;
-  coordinates?: {
-    lat: number;
-    lng: number;
-  };
+  gerant_id: string;
+  created_at?: any;
+  stars?: number;
+  images?: string[];
 }
 
 export interface Room {
   id: string;
-  hotelId: string;
-  type: string; // Suite, Double, etc.
-  pricePerNight: number;
-  capacity: number;
+  hotel_id: string;
+  numero: string;
+  type: string;
+  prix: number;
+  capacite: number;
+  statut: 'libre' | 'occupée' | 'maintenance';
   description: string;
-  images: string[];
-  isAvailable: boolean;
-  amenities: string[];
+  image?: string;
 }
 
 export interface Reservation {
   id: string;
-  clientId: string;
-  hotelId: string;
-  roomId: string;
-  startDate: string;
-  endDate: string;
-  totalPrice: number;
-  status: 'pending' | 'confirmed' | 'cancelled';
-  createdAt: string;
-  guestsCount: number;
-  options: string[]; // Pivot: reservation_option
+  user_id: string;
+  chambre_id: string;
+  hotel_id: string;
+  date_arrivee: string;
+  date_depart: string;
+  statut: 'en_attente' | 'confirmee' | 'annulee';
+  demande_speciale?: string;
+  hotel_nom?: string;
+  chambre_type?: string;
+  chambre_prix?: number;
+  client_nom?: string;
+  client_prenom?: string;
 }
 
 export interface AmenityOption {
@@ -62,11 +60,11 @@ export interface AmenityOption {
 
 export interface Review {
   id: string;
-  hotelId: string;
-  clientId: string;
-  clientName: string;
-  rating: number;
-  comment: string;
-  isModerated: boolean;
-  createdAt: string;
+  chambre_id: string;
+  user_id: string;
+  nom: string;
+  prenom: string;
+  note: number;
+  commentaire: string;
+  created_at: any;
 }

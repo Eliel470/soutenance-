@@ -1,47 +1,52 @@
-import { where, orderBy, limit } from 'firebase/firestore';
-import { firestoreService } from './firestoreService';
-import { Hotel, Room, Review } from '../types';
+import { Hotel, Room } from '../types';
+import { api } from './api';
 
 export const hotelService = {
-  async getHotels(city?: string) {
-    const qConstraints: any[] = city ? [where('city', '==', city)] : [];
-    qConstraints.push(orderBy('stars', 'desc'));
-    return firestoreService.getCollection<Hotel>('hotels', qConstraints);
+  async getHotels(city?: string): Promise<Hotel[]> {
+    return api.get(city ? `/hotels?city=${city}` : '/hotels');
   },
 
-  async getHotelById(id: string) {
-    return firestoreService.getDocument<Hotel>('hotels', id);
+  async getManagerHotels(managerId: string): Promise<Hotel[]> {
+    return api.get(`/manager/${managerId}/hotels`);
   },
 
-  async getRooms(hotelId: string) {
-    return firestoreService.getCollection<Room>(`hotels/${hotelId}/rooms`, [where('isAvailable', '==', true)]);
+  async getHotelById(id: string): Promise<Hotel | null> {
+    try {
+      return await api.get(`/hotels/${id}`);
+    } catch (e) {
+      return null;
+    }
   },
 
-  async getReviews(hotelId: string) {
-    return firestoreService.getCollection<Review>('reviews', [
-      where('hotelId', '==', hotelId),
-      where('isModerated', '==', true),
-      orderBy('createdAt', 'desc')
-    ]);
+  async getRooms(hotelId: string, checkin?: string, checkout?: string): Promise<Room[]> {
+    let url = `/hotels/${hotelId}/rooms`;
+    if (checkin && checkout) {
+      url += `?checkin=${checkin}&checkout=${checkout}`;
+    }
+    return api.get(url);
   },
 
-  async createHotel(hotelData: Partial<Hotel>) {
-    return firestoreService.addDocument('hotels', hotelData);
+  async createHotel(hotelData: Omit<Hotel, 'id'>): Promise<{ id: string }> {
+    return api.post('/hotels', hotelData);
   },
 
-  async createRoom(hotelId: string, roomData: Partial<Room>) {
-    return firestoreService.addDocument(`hotels/${hotelId}/rooms`, {
-      ...roomData,
-      hotelId,
-      isAvailable: true
-    });
+  async updateHotel(id: string, data: Partial<Hotel>): Promise<void> {
+    return api.put(`/hotels/${id}`, data);
   },
 
-  async deleteHotel(id: string) {
-    return firestoreService.deleteDocument('hotels', id);
+  async deleteHotel(id: string): Promise<void> {
+    return api.delete(`/hotels/${id}`);
   },
 
-  async updateHotel(id: string, data: Partial<Hotel>) {
-    return firestoreService.updateDocument('hotels', id, data);
+  async addRoom(hotelId: string, roomData: Omit<Room, 'id' | 'hotel_id'>): Promise<{ id: string }> {
+    return api.post(`/hotels/${hotelId}/rooms`, roomData);
+  },
+
+  async updateRoom(hotelId: string, roomId: string, data: Partial<Room>): Promise<void> {
+    return api.put(`/hotels/rooms/${roomId}`, data);
+  },
+
+  async deleteRoom(hotelId: string, roomId: string): Promise<void> {
+    return api.delete(`/hotels/rooms/${roomId}`);
   }
 };

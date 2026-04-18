@@ -9,8 +9,10 @@ const Register: React.FC = () => {
   const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [displayName, setDisplayName] = useState('');
+  const [nom, setNom] = useState('');
+  const [prenom, setPrenom] = useState('');
   const [role, setRole] = useState<UserRole>('client');
+  const [isForcedRole, setIsForcedRole] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { register } = useAuth();
@@ -21,6 +23,10 @@ const Register: React.FC = () => {
     const roleParam = params.get('role');
     if (roleParam === 'gerant') {
       setRole('gerant');
+      setIsForcedRole(true);
+    } else {
+      setRole('client');
+      setIsForcedRole(true); // Hide selector for standard register too
     }
   }, [location]);
 
@@ -33,20 +39,10 @@ const Register: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      await register(email, password, displayName, role);
+      await register(nom, prenom, email, password, role);
       navigate('/');
     } catch (err: any) {
-      if (err.code === 'auth/email-already-in-use') {
-        setError('Cette adresse email est déjà associée à un compte. Veuillez vous connecter ou utiliser une autre adresse.');
-      } else if (err.code === 'auth/invalid-email') {
-        setError('L’adresse email n’est pas valide.');
-      } else if (err.code === 'auth/weak-password') {
-        setError('Le mot de passe est trop faible. Il doit contenir au moins 6 caractères.');
-      } else if (err.code === 'auth/operation-not-allowed') {
-        setError('L’inscription par email n’est pas activée. Veuillez l’activer dans la console Firebase (Authentication > Sign-in method).');
-      } else {
-        setError('Une erreur est survenue lors de l’inscription. Veuillez réessayer.');
-      }
+      setError(err.message || 'Une erreur est survenue lors de l’inscription. Veuillez réessayer.');
       console.error(err);
     } finally {
       setLoading(false);
@@ -60,11 +56,24 @@ const Register: React.FC = () => {
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-lg"
       >
-        <div className="bg-white rounded-card border border-border-base p-8 shadow-sm">
+        <div className="bg-white rounded-card border border-border-base p-10 shadow-sm relative overflow-hidden">
+          {isForcedRole && (
+            <div className="absolute top-0 right-0">
+              <div className="bg-primary text-white text-[9px] font-black uppercase tracking-widest px-4 py-1 rotate-45 translate-x-8 translate-y-3">
+                Pro
+              </div>
+            </div>
+          )}
           <div className="text-center mb-8">
-            <div className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Inscription Gratuite</div>
-            <h1 className="text-3xl font-black text-text-main tracking-tight">Rejoignez-nous</h1>
-            <p className="text-sm text-text-muted mt-2">Créez votre compte en quelques secondes</p>
+            <div className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-2">
+              {role === 'gerant' ? 'Partenariat Hôtelier' : 'Compte Client'}
+            </div>
+            <h1 className="text-4xl font-black text-text-main tracking-tighter leading-none mb-3">
+              {role === 'gerant' ? 'Inscrivez votre Hôtel' : 'Rejoignez HôteEase'}
+            </h1>
+            <p className="text-sm text-text-muted font-medium">
+              {role === 'gerant' ? 'Devenez partenaire et boostez votre visibilité au Bénin.' : 'Créez votre compte voyageur en quelques secondes.'}
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -75,17 +84,32 @@ const Register: React.FC = () => {
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1.5 md:col-span-2">
-                <label className="text-[10px] font-black text-text-muted uppercase tracking-widest px-1">Nom Complet</label>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-text-muted uppercase tracking-widest px-1">Nom</label>
                 <div className="relative group">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-text-muted group-focus-within:text-primary transition-colors" />
                   <input
                     type="text"
                     required
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
+                    value={nom}
+                    onChange={(e) => setNom(e.target.value)}
                     className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-border-base rounded-button focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm font-medium"
-                    placeholder="Jean Dupont"
+                    placeholder="Dupont"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-text-muted uppercase tracking-widest px-1">Prénom</label>
+                <div className="relative group">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-text-muted group-focus-within:text-primary transition-colors" />
+                  <input
+                    type="text"
+                    required
+                    value={prenom}
+                    onChange={(e) => setPrenom(e.target.value)}
+                    className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-border-base rounded-button focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm font-medium"
+                    placeholder="Jean"
                   />
                 </div>
               </div>
@@ -120,35 +144,37 @@ const Register: React.FC = () => {
                 </div>
               </div>
 
-              <div className="md:col-span-2 space-y-3">
-                <label className="text-[10px] font-black text-text-muted uppercase tracking-widest px-1">Je souhaite être :</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setRole('client')}
-                    className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
-                      role === 'client' 
-                        ? 'border-primary bg-primary/5 text-primary' 
-                        : 'border-border-base text-text-muted hover:border-text-muted'
-                    }`}
-                  >
-                    <UserCircle className="h-6 w-6" />
-                    <span className="text-xs font-bold">Client</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRole('gerant')}
-                    className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
-                      role === 'gerant' 
-                        ? 'border-primary bg-primary/5 text-primary' 
-                        : 'border-border-base text-text-muted hover:border-text-muted'
-                    }`}
-                  >
-                    <Building2 className="h-6 w-6" />
-                    <span className="text-xs font-bold">Gérant d'Hôtel</span>
-                  </button>
+              {!isForcedRole && (
+                <div className="md:col-span-2 space-y-3 pt-2">
+                  <label className="text-[10px] font-black text-text-muted uppercase tracking-widest px-1">Je souhaite être :</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setRole('client')}
+                      className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                        role === 'client' 
+                          ? 'border-primary bg-primary/5 text-primary' 
+                          : 'border-border-base text-text-muted hover:border-text-muted'
+                      }`}
+                    >
+                      <UserCircle className="h-6 w-6" />
+                      <span className="text-xs font-bold">Client</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRole('gerant')}
+                      className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                        role === 'gerant' 
+                          ? 'border-primary bg-primary/5 text-primary' 
+                          : 'border-border-base text-text-muted hover:border-text-muted'
+                      }`}
+                    >
+                      <Building2 className="h-6 w-6" />
+                      <span className="text-xs font-bold">Gérant d'Hôtel</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             <button
